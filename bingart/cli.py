@@ -75,8 +75,7 @@ def build_parser():
         version=f"bingart {__version__}",
     )
 
-    model_group = parser.add_mutually_exclusive_group()
-    model_group.add_argument(
+    parser.add_argument(
         "-m",
         "--model",
         choices=list(MODEL_MAP.keys()),
@@ -84,8 +83,7 @@ def build_parser():
         help="AI model to use (default: dalle).",
     )
 
-    aspect_group = parser.add_mutually_exclusive_group()
-    aspect_group.add_argument(
+    parser.add_argument(
         "-a",
         "--aspect",
         choices=list(ASPECT_MAP.keys()),
@@ -165,20 +163,32 @@ def resolve_cookie(args):
 async def download_file(url, dest_path, session=None):
     import urllib.request
 
+    logger = logging.getLogger("bingart")
+    loop = asyncio.get_running_loop()
+
     try:
-        urllib.request.urlretrieve(url, str(dest_path))
+        await loop.run_in_executor(
+            None, lambda: urllib.request.urlretrieve(url, str(dest_path))
+        )
         return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("urllib download failed for %s: %s", url, exc)
+
     try:
         from curl_cffi.requests import get
 
-        resp = get(url, allow_redirects=True)
-        if resp.status_code == 200:
-            dest_path.write_bytes(resp.content)
+        def _curl_get():
+            resp = get(url, allow_redirects=True)
+            if resp.status_code == 200:
+                dest_path.write_bytes(resp.content)
+                return True
+            return False
+
+        if await loop.run_in_executor(None, _curl_get):
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("curl_cffi download failed for %s: %s", url, exc)
+
     return False
 
 

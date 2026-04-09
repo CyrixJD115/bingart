@@ -31,7 +31,7 @@ pip install bingart
 ### From Source (Portable)
 
 ```bash
-git clone https://github.com/CyrixJD115/bingart.git
+git clone https://github.com/DedInc/bingart.git
 cd bingart
 python bingart.py --help
 ```
