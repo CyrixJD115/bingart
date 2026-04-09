@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as f:
+with open("README.MD", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
@@ -24,4 +24,7 @@ setup(
     include_package_data=True,
     install_requires=["curl_cffi", "rookiepy"],
     python_requires=">=3.6",
+    entry_points={
+        "console_scripts": ["bingart=bingart.cli:main"],
+    },
 )
