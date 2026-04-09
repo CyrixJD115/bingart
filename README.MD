@@ -2,14 +2,13 @@
 
 bingart is an unofficial async API wrapper for Bing Image & Video Creator. It allows you to programmatically generate AI-powered images and videos using Bing's creation tools with support for multiple models and aspect ratios.
 
+Now includes a full **command-line interface** — no scripting required.
+
 > **Warning:** The `_U` auth cookie should be changed every 2-4 weeks for proper functionality.
 
-## Description
+## Key Features
 
-This module uses web scraping and engineering techniques to interface with Bing's internal image and video creation APIs. It is not an official API client.
-
-### Key Features
-
+- **CLI support** — generate images and videos directly from the terminal
 - **Fully asynchronous** — built on `curl_cffi` `AsyncSession` and `asyncio`
 - **Generate images** with multiple AI models (DALL-E, GPT-4O, MAI1)
 - **Generate videos** from text prompts
@@ -19,14 +18,186 @@ This module uses web scraping and engineering techniques to interface with Bing'
 - **Enhanced prompts** — get AI-improved versions of your prompts
 - **Async context manager** support (`async with`)
 - **Custom exceptions** for common error handling
+- **Download support** — save generated images/video directly to disk
 
 ## Installation
+
+### From PyPI
 
 ```bash
 pip install bingart
 ```
 
-## Usage
+### From Source (Portable)
+
+```bash
+git clone https://github.com/CyrixJD115/bingart.git
+cd bingart
+python bingart.py --help
+```
+
+No install needed — `bingart.py` at the project root works as a portable runner.
+
+## CLI Usage
+
+### Basic Image Generation
+
+```bash
+python bingart.py "sunset over mountains" -c YOUR_U_COOKIE
+```
+
+### Auto-Detect Cookie from Browser
+
+```bash
+python bingart.py "cyberpunk city" -A
+```
+
+### Video Generation
+
+```bash
+python bingart.py "a dancing robot in a futuristic city" -V -A
+```
+
+### All Flags
+
+```
+usage: bingart [-h] [--version] [-m {dalle,gpt4o,mai1}]
+               [-a {square,landscape,portrait}] [-V] [-c COOKIE | -A]
+               [-o {text,json,urls}] [-d DIR] [-v]
+               prompt
+
+positional arguments:
+  prompt                          Text prompt for image/video generation.
+
+options:
+  -h, --help                      Show help message and exit
+  --version                       Print version
+  -m, --model                     AI model: dalle, gpt4o, mai1 (default: dalle)
+  -a, --aspect                    Aspect ratio: square, landscape, portrait (default: square)
+  -V, --video                     Generate a video instead of an image
+  -c, --cookie COOKIE             _U auth cookie value for Bing
+  -A, --auto                      Auto-detect _U cookie from installed browsers
+  -o, --output {text,json,urls}   Output format (default: text)
+  -d, --download DIR              Download generated files to DIR
+  -v, --verbose                   Enable verbose/debug output
+```
+
+### Models
+
+| Flag | Model |
+|------|-------|
+| `-m dalle` | DALL-E 3 (default) |
+| `-m gpt4o` | GPT-4O image generation |
+| `-m mai1` | MAI1 model |
+
+### Aspect Ratios
+
+| Flag | Ratio |
+|------|-------|
+| `-a square` | 1:1 (default) |
+| `-a landscape` | 7:4 (wide) |
+| `-a portrait` | 4:7 (tall) |
+
+### Output Formats
+
+**Text** (default) — human-readable:
+
+```bash
+python bingart.py "abstract art" -A
+```
+```
+Model: DALLE
+Aspect: SQUARE
+Enhanced Prompt: abstract art composition with vibrant colors
+Images (4):
+  [1] https://th.bing.com/th/id/OIG.xxx?pid=ImgGn
+  [2] https://th.bing.com/th/id/OIG.yyy?pid=ImgGn
+  [3] https://th.bing.com/th/id/OIG.zzz?pid=ImgGn
+  [4] https://th.bing.com/th/id/OIG.www?pid=ImgGn
+```
+
+**JSON** — raw API response:
+
+```bash
+python bingart.py "abstract art" -A -o json
+```
+```json
+{
+  "images": [
+    {"url": "https://th.bing.com/th/id/OIG.xxx?pid=ImgGn"},
+    {"url": "https://th.bing.com/th/id/OIG.yyy?pid=ImgGn"}
+  ],
+  "prompt": "abstract art composition",
+  "model": "DALLE",
+  "aspect": "SQUARE"
+}
+```
+
+**URLs** — one per line, pipe-friendly:
+
+```bash
+python bingart.py "abstract art" -A -o urls
+```
+```
+https://th.bing.com/th/id/OIG.xxx?pid=ImgGn
+https://th.bing.com/th/id/OIG.yyy?pid=ImgGn
+```
+
+### Download Files
+
+Save generated images or video directly to a directory:
+
+```bash
+python bingart.py "sunset over mountains" -A -d ./output
+```
+```
+Model: DALLE
+Aspect: SQUARE
+Enhanced Prompt: sunset over mountains with golden light
+Images (4):
+  [1] https://th.bing.com/th/id/OIG.xxx?pid=ImgGn
+  [2] https://th.bing.com/th/id/OIG.yyy?pid=ImgGn
+Downloading image 1/4 -> output/001.jpg
+  Saved: output/001.jpg
+Downloading image 2/4 -> output/002.jpg
+  Saved: output/002.jpg
+```
+
+### Authentication
+
+Auth is resolved in this order:
+
+1. `--cookie` / `-c` flag — pass the `_U` cookie value directly
+2. `--auto` / `-A` flag — auto-detect from installed browsers (Chrome, Edge, Firefox, Brave, Opera, Vivaldi, Chromium)
+3. `BINGART_COOKIE` environment variable — set it in your shell profile
+4. Interactive prompt — if none of the above are provided, you'll be prompted
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Authentication error (invalid or expired cookie) |
+| `2` | Prompt rejected (content policy violation) |
+| `3` | Generic / unknown error |
+
+### More Examples
+
+```bash
+# GPT-4O landscape image, JSON output
+python bingart.py "futuristic cityscape" -m gpt4o -a landscape -A -o json
+
+# Portrait image, download to folder
+python bingart.py "mystical wizard portrait" -m dalle -a portrait -d ./art
+
+# Video with auto cookie, verbose logging
+python bingart.py "cat playing piano" -V -A -v
+
+# Pipe URLs to wget
+python bingart.py "geometric patterns" -o urls -c YOUR_COOKIE | xargs -n1 wget
+```
+
+## Python API Usage
 
 ### Basic Setup
 
@@ -68,7 +239,6 @@ Let bingart automatically fetch cookies from your installed browsers:
 ```python
 from bingart import BingArt
 
-# Auto-fetch cookies from Chrome, Edge, Firefox, Brave, Opera, Vivaldi, or Chromium
 bing_art = BingArt(auto=True)
 ```
 
@@ -89,7 +259,6 @@ from bingart import BingArt, Model, Aspect
 
 async def main():
     async with BingArt(auth_cookie_U='your_cookie_value') as bing_art:
-        # Generate with GPT-4O model in portrait aspect
         result = await bing_art.generate(
             'a futuristic cityscape',
             model=Model.GPT4O,
@@ -97,7 +266,6 @@ async def main():
         )
         print(result)
 
-        # Generate with MAI1 model in landscape aspect
         result = await bing_art.generate(
             'serene mountain landscape',
             model=Model.MAI1,
@@ -105,7 +273,6 @@ async def main():
         )
         print(result)
 
-        # Generate with DALL-E (default) in square aspect
         result = await bing_art.generate(
             'abstract art composition',
             model=Model.DALLE,
@@ -214,66 +381,6 @@ asyncio.run(main())
 4. Go to Application/Storage → Cookies → `https://www.bing.com`
 5. Find the `_U` cookie and copy its value
 
-## Complete Example
-
-```python
-import asyncio
-from bingart import BingArt, Model, Aspect, AuthCookieError, PromptRejectedError
-
-async def main():
-    try:
-        async with BingArt(auto=True) as bing_art:
-            # Generate multiple images with different settings
-            prompts = [
-                {
-                    "query": "cyberpunk cityscape at night",
-                    "model": Model.GPT4O,
-                    "aspect": Aspect.LANDSCAPE
-                },
-                {
-                    "query": "portrait of a mystical wizard",
-                    "model": Model.DALLE,
-                    "aspect": Aspect.PORTRAIT
-                },
-                {
-                    "query": "abstract geometric patterns",
-                    "model": Model.MAI1,
-                    "aspect": Aspect.SQUARE
-                }
-            ]
-
-            for config in prompts:
-                print(f"\nGenerating: {config['query']}")
-                result = await bing_art.generate(
-                    config['query'],
-                    model=config['model'],
-                    aspect=config['aspect']
-                )
-
-                print(f"Model: {result['model']}")
-                print(f"Aspect: {result['aspect']}")
-                print(f"Enhanced prompt: {result['prompt']}")
-                print(f"Generated {len(result['images'])} images")
-
-                for idx, img in enumerate(result['images'], 1):
-                    print(f"  Image {idx}: {img['url']}")
-
-            # Generate a video
-            print("\nGenerating video...")
-            video_result = await bing_art.generate(
-                'a cat playing piano',
-                content_type='video'
-            )
-            print(f"Video URL: {video_result['video']['video_url']}")
-
-    except AuthCookieError as e:
-        print(f"Authentication error: {e}")
-    except PromptRejectedError as e:
-        print(f"Prompt rejected: {e}")
-
-asyncio.run(main())
-```
-
 ## Requirements
 
 - Python >= 3.6
@@ -286,7 +393,7 @@ Pull requests are welcome! Please open an issue to discuss major changes before 
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see LICENSE file for details.
 
 ## Disclaimer
 
