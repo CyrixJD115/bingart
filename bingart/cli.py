@@ -161,10 +161,16 @@ def resolve_cookie(args):
 
 
 async def download_file(url, dest_path, session=None):
+    import urllib.parse
     import urllib.request
 
     logger = logging.getLogger("bingart")
     loop = asyncio.get_running_loop()
+
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        logger.debug("blocked non-http(s) URL: %s", url)
+        return False
 
     try:
         await loop.run_in_executor(
@@ -274,9 +280,10 @@ async def run(args):
     logger = logging.getLogger("bingart")
     if args.verbose:
         logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-        logger.addHandler(handler)
+        if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+            handler = logging.StreamHandler(sys.stderr)
+            handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+            logger.addHandler(handler)
         logger.debug("Model: %s", args.model)
         logger.debug("Aspect: %s", args.aspect)
         logger.debug("Content type: %s", content_type)

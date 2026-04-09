@@ -43,24 +43,24 @@ No install needed — `bingart.py` at the project root works as a portable runne
 ### Basic Image Generation
 
 ```bash
-python bingart.py "sunset over mountains" -c YOUR_U_COOKIE
+bingart "sunset over mountains" -c YOUR_U_COOKIE
 ```
 
 ### Auto-Detect Cookie from Browser
 
 ```bash
-python bingart.py "cyberpunk city" -A
+bingart "cyberpunk city" -A
 ```
 
 ### Video Generation
 
 ```bash
-python bingart.py "a dancing robot in a futuristic city" -V -A
+bingart "a dancing robot in a futuristic city" -V -A
 ```
 
 ### All Flags
 
-```
+```text
 usage: bingart [-h] [--version] [-m {dalle,gpt4o,mai1}]
                [-a {square,landscape,portrait}] [-V] [-c COOKIE | -A]
                [-o {text,json,urls}] [-d DIR] [-v]
@@ -103,9 +103,9 @@ options:
 **Text** (default) — human-readable:
 
 ```bash
-python bingart.py "abstract art" -A
+bingart "abstract art" -A
 ```
-```
+```text
 Model: DALLE
 Aspect: SQUARE
 Enhanced Prompt: abstract art composition with vibrant colors
@@ -119,7 +119,7 @@ Images (4):
 **JSON** — raw API response:
 
 ```bash
-python bingart.py "abstract art" -A -o json
+bingart "abstract art" -A -o json
 ```
 ```json
 {
@@ -136,9 +136,9 @@ python bingart.py "abstract art" -A -o json
 **URLs** — one per line, pipe-friendly:
 
 ```bash
-python bingart.py "abstract art" -A -o urls
+bingart "abstract art" -A -o urls
 ```
-```
+```text
 https://th.bing.com/th/id/OIG.xxx?pid=ImgGn
 https://th.bing.com/th/id/OIG.yyy?pid=ImgGn
 ```
@@ -148,9 +148,9 @@ https://th.bing.com/th/id/OIG.yyy?pid=ImgGn
 Save generated images or video directly to a directory:
 
 ```bash
-python bingart.py "sunset over mountains" -A -d ./output
+bingart "sunset over mountains" -A -d ./output
 ```
-```
+```text
 Model: DALLE
 Aspect: SQUARE
 Enhanced Prompt: sunset over mountains with golden light
@@ -185,16 +185,16 @@ Auth is resolved in this order:
 
 ```bash
 # GPT-4O landscape image, JSON output
-python bingart.py "futuristic cityscape" -m gpt4o -a landscape -A -o json
+bingart "futuristic cityscape" -m gpt4o -a landscape -A -o json
 
 # Portrait image, download to folder
-python bingart.py "mystical wizard portrait" -m dalle -a portrait -d ./art
+bingart "mystical wizard portrait" -m dalle -a portrait -d ./art
 
 # Video with auto cookie, verbose logging
-python bingart.py "cat playing piano" -V -A -v
+bingart "cat playing piano" -V -A -v
 
 # Pipe URLs to wget
-python bingart.py "geometric patterns" -o urls -c YOUR_COOKIE | xargs -n1 wget
+bingart "geometric patterns" -o urls -c YOUR_COOKIE | xargs -n1 wget
 ```
 
 ## Python API Usage
