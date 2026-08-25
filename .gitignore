@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+venv/
+.env
+.ruff_cache/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+image_test/

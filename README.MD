@@ -10,7 +10,7 @@ Now includes a full **command-line interface** — no scripting required.
 
 - **CLI support** — generate images and videos directly from the terminal
 - **Fully asynchronous** — built on `curl_cffi` `AsyncSession` and `asyncio`
-- **Generate images** with multiple AI models (DALL-E, GPT-4O, MAI1)
+- **Generate images** with Bing's latest MAI models (MAI-Image-2.5-Flash, MAI-Image-2e)
 - **Generate videos** from text prompts
 - **Custom aspect ratios** (Square, Landscape, Portrait)
 - **Get image URLs** — up to 4 generated images per request
@@ -38,6 +38,19 @@ python bingart.py --help
 
 No install needed — `bingart.py` at the project root works as a portable runner.
 
+### With uv
+
+```bash
+uv tool install bingart        # install the CLI globally (uvx bingart ...)
+# or, inside a project:
+uv add bingart
+```
+
+> Note: `bingart` depends on `rookiepy`, which only ships prebuilt wheels up to
+> Python 3.12. On newer interpreters uv will fetch a compatible Python
+> automatically (the `requires-python` cap is `<3.13`).
+
+
 ## CLI Usage
 
 ### Basic Image Generation
@@ -61,7 +74,7 @@ bingart "a dancing robot in a futuristic city" -V -A
 ### All Flags
 
 ```text
-usage: bingart [-h] [--version] [-m {dalle,gpt4o,mai1}]
+usage: bingart [-h] [--version] [-m {flash,illustration}]
                [-a {square,landscape,portrait}] [-V] [-c COOKIE | -A]
                [-o {text,json,urls}] [-d DIR] [-v]
                prompt
@@ -72,7 +85,7 @@ positional arguments:
 options:
   -h, --help                      Show help message and exit
   --version                       Print version
-  -m, --model                     AI model: dalle, gpt4o, mai1 (default: dalle)
+  -m, --model                     AI model: flash, illustration (default: flash)
   -a, --aspect                    Aspect ratio: square, landscape, portrait (default: square)
   -V, --video                     Generate a video instead of an image
   -c, --cookie COOKIE             _U auth cookie value for Bing
@@ -86,9 +99,8 @@ options:
 
 | Flag | Model |
 |------|-------|
-| `-m dalle` | DALL-E 3 (default) |
-| `-m gpt4o` | GPT-4O image generation |
-| `-m mai1` | MAI1 model |
+| `-m flash` | MAI-Image-2.5-Flash — "Vivid and natural" (default, photoreal/detailed) |
+| `-m illustration` | MAI-Image-2e — "Stylized illustration" (stylized/artistic) |
 
 ### Aspect Ratios
 
@@ -106,7 +118,7 @@ options:
 bingart "abstract art" -A
 ```
 ```text
-Model: DALLE
+Model: MAI-Image-2.5-Flash (Vivid and natural)
 Aspect: SQUARE
 Enhanced Prompt: abstract art composition with vibrant colors
 Images (4):
@@ -128,7 +140,7 @@ bingart "abstract art" -A -o json
     {"url": "https://th.bing.com/th/id/OIG.yyy?pid=ImgGn"}
   ],
   "prompt": "abstract art composition",
-  "model": "DALLE",
+  "model": "MAI-Image-2.5-Flash",
   "aspect": "SQUARE"
 }
 ```
@@ -151,7 +163,7 @@ Save generated images or video directly to a directory:
 bingart "sunset over mountains" -A -d ./output
 ```
 ```text
-Model: DALLE
+Model: MAI-Image-2.5-Flash (Vivid and natural)
 Aspect: SQUARE
 Enhanced Prompt: sunset over mountains with golden light
 Images (4):
@@ -185,10 +197,10 @@ Auth is resolved in this order:
 
 ```bash
 # GPT-4O landscape image, JSON output
-bingart "futuristic cityscape" -m gpt4o -a landscape -A -o json
+bingart "futuristic cityscape" -m illustration -a landscape -A -o json
 
 # Portrait image, download to folder
-bingart "mystical wizard portrait" -m dalle -a portrait -d ./art
+bingart "mystical wizard portrait" -m flash -a portrait -d ./art
 
 # Video with auto cookie, verbose logging
 bingart "cat playing piano" -V -A -v
@@ -261,21 +273,21 @@ async def main():
     async with BingArt(auth_cookie_U='your_cookie_value') as bing_art:
         result = await bing_art.generate(
             'a futuristic cityscape',
-            model=Model.GPT4O,
+            model=Model.ILLUSTRATION,
             aspect=Aspect.PORTRAIT
         )
         print(result)
 
         result = await bing_art.generate(
             'serene mountain landscape',
-            model=Model.MAI1,
+            model=Model.FLASH,
             aspect=Aspect.LANDSCAPE
         )
         print(result)
 
         result = await bing_art.generate(
             'abstract art composition',
-            model=Model.DALLE,
+            model=Model.FLASH,
             aspect=Aspect.SQUARE
         )
         print(result)
@@ -288,9 +300,8 @@ asyncio.run(main())
 ```python
 from bingart import Model
 
-Model.DALLE    # DALL-E 3 (default)
-Model.GPT4O    # GPT-4O image generation
-Model.MAI1     # MAI1 model
+Model.FLASH         # MAI-Image-2.5-Flash - "Vivid and natural" (default)
+Model.ILLUSTRATION  # MAI-Image-2e - "Stylized illustration"
 ```
 
 ### Available Aspect Ratios
@@ -333,7 +344,7 @@ asyncio.run(main())
     {"url": "https://th.bing.com/th/id/OIG.www?pid=ImgGn"}
   ],
   "prompt": "enhanced version of your original prompt",
-  "model": "GPT4O",
+  "model": "MAI-Image-2.5-Flash",
   "aspect": "PORTRAIT"
 }
 ```

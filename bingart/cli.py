@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import datetime
 import json
 import os
 import sys
@@ -22,9 +23,13 @@ EXIT_PROMPT_REJECTED = 2
 EXIT_GENERIC_ERROR = 3
 
 MODEL_MAP = {
-    "dalle": Model.DALLE,
-    "gpt4o": Model.GPT4O,
-    "mai1": Model.MAI1,
+    "flash": Model.FLASH,
+    "illustration": Model.ILLUSTRATION,
+}
+
+MODEL_DISPLAY = {
+    Model.FLASH: "MAI-Image-2.5-Flash (Vivid and natural)",
+    Model.ILLUSTRATION: "MAI-Image-2e (Stylized illustration)",
 }
 
 ASPECT_MAP = {
@@ -34,39 +39,90 @@ ASPECT_MAP = {
 }
 
 
+_CODES = {
+    "green": "\033[32m",
+    "red": "\033[31m",
+    "cyan": "\033[36m",
+    "dim": "\033[2m",
+    "bold": "\033[1m",
+    "yellow": "\033[33m",
+}
+
+
+def _color(name, text, file=None):
+    if os.environ.get("NO_COLOR"):
+        return text
+    target = file or sys.stdout
+    if not target.isatty():
+        return text
+    code = _CODES.get(name)
+    if not code:
+        return text
+    return f"{code}{text}\033[0m"
+
+
+def _header(version, timestamp, model, aspect, content_type):
+    lines = [
+        f"bingart v{version}  ({timestamp})",
+        f"  Creating: {content_type}",
+        f"  Model:    {model}",
+        f"  Aspect:   {aspect}",
+    ]
+    return _color("bold", "\n".join(lines))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="bingart",
         description=(
-            "bingart - Unofficial CLI for Bing Image & Video Creator.\n"
-            "Generate AI-powered images and videos from the command line."
+            "bingart - create AI images and videos with Bing's Image Creator.\n\n"
+            "You give it a text description (a 'prompt') and it generates pictures\n"
+            "(or a video) using Bing's AI models. The result is printed as a list\n"
+            "of links you can open in a browser, or saved to disk with --download."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "examples:\n"
-            '  bingart "sunset over mountains"\n'
-            '  bingart "cyberpunk city" -m gpt4o -a landscape\n'
-            '  bingart "dancing robot" -V -A -o json\n'
-            '  bingart "abstract art" -o urls -d ./output\n'
-            "\n"
-            "authentication:\n"
-            "  Auth is resolved in this order:\n"
-            "    1. --cookie / -c flag\n"
-            "    2. --auto / -A flag (browser cookie detection)\n"
-            "    3. BINGART_COOKIE environment variable\n"
-            "    4. Interactive prompt\n"
-            "\n"
-            "exit codes:\n"
+            "QUICK START\n"
+            "  You need to be logged in to Bing. The easiest way is to let bingart\n"
+            "  read the login cookie straight from a browser you are already using:\n\n"
+            '      bingart "a cat wearing a tiny hat" -A\n\n'
+            "  (The -A / --auto flag grabs your saved Bing session automatically.)\n"
+            "  If that does not work, copy your _U cookie manually with --cookie.\n\n"
+            "CHOOSING A MODEL (-m)\n"
+            "  flash         MAI-Image-2.5-Flash - 'Vivid and natural'. Photoreal,\n"
+            "                detailed and dynamic results. Good all-round default. (default)\n"
+            "  illustration  MAI-Image-2e - 'Stylized illustration'. Best for quick,\n"
+            "                stylized / artistic pictures.\n\n"
+            "CHOOSING A SHAPE (-a)\n"
+            "  square    square, 1:1  - good for avatars, thumbnails.  (default)\n"
+            "  landscape  wide, 7:4    - good for wallpapers, banners.\n"
+            "  portrait   tall, 4:7    - good for phone screens, posters.\n\n"
+            "OUTPUT FORMAT (-o)\n"
+            "  text   human-readable summary with one link per image. (default)\n"
+            "  json   the raw machine-readable response (for scripts).\n"
+            "  urls   just the links, one per line (easy to pipe into other tools).\n\n"
+            "EXAMPLES\n"
+            '  bingart "sunset over mountains" -A\n'
+            '  bingart "cyberpunk city" -m illustration -a landscape -A\n'
+            '  bingart "a dancing robot" -V -A -o json\n'
+            '  bingart "abstract art" -A -o urls -d ./my_images\n\n'
+            "HOW LOGIN IS DECIDED (first match wins)\n"
+            "  1. --cookie / -c  : a _U cookie you paste in directly\n"
+            "  2. --auto   / -A  : read the cookie from an installed browser\n"
+            "  3. BINGART_COOKIE  : an environment variable you have set\n"
+            "  4. interactive prompt : you are asked to type the cookie\n\n"
+            "EXIT CODES\n"
             "  0  success\n"
-            "  1  authentication error\n"
-            "  2  prompt rejected (content policy)\n"
-            "  3  generic / unknown error\n"
+            "  1  login failed (cookie missing, invalid or expired)\n"
+            "  2  prompt rejected (it broke Bing's content rules)\n"
+            "  3  something else went wrong\n"
         ),
     )
 
     parser.add_argument(
         "prompt",
-        help="Text prompt for image/video generation.",
+        help="What you want to create, written in plain words. "
+        'Example: "a watercolor painting of a fox in the snow".',
     )
 
     parser.add_argument(
@@ -79,8 +135,10 @@ def build_parser():
         "-m",
         "--model",
         choices=list(MODEL_MAP.keys()),
-        default="dalle",
-        help="AI model to use (default: dalle).",
+        default="flash",
+        metavar="{flash,illustration}",
+        help="Which AI model draws the result. Default: flash. "
+        "See the CHOOSING A MODEL section below for what each one does.",
     )
 
     parser.add_argument(
@@ -88,7 +146,9 @@ def build_parser():
         "--aspect",
         choices=list(ASPECT_MAP.keys()),
         default="square",
-        help="Aspect ratio (default: square).",
+        metavar="{square,landscape,portrait}",
+        help="Shape/size of the output. Default: square. "
+        "See the CHOOSING A SHAPE section below for details.",
     )
 
     parser.add_argument(
@@ -96,7 +156,7 @@ def build_parser():
         "--video",
         action="store_true",
         default=False,
-        help="Generate a video instead of an image.",
+        help="Make a VIDEO instead of an image. Leave this off to make pictures.",
     )
 
     auth_group = parser.add_mutually_exclusive_group()
@@ -104,14 +164,19 @@ def build_parser():
         "-c",
         "--cookie",
         default=None,
-        help="_U auth cookie value for Bing.",
+        metavar="COOKIE",
+        help="Your Bing '_U' login cookie, pasted as text. "
+        "Get it from your browser's dev tools (see README). "
+        "Cannot be used together with --auto.",
     )
     auth_group.add_argument(
         "-A",
         "--auto",
         action="store_true",
         default=False,
-        help="Auto-detect _U cookie from installed browsers.",
+        help="Automatically grab the Bing login cookie from a browser installed "
+        "on this computer (Chrome, Edge, Firefox, Brave, Opera, Vivaldi, Chromium). "
+        "Cannot be used together with --cookie.",
     )
 
     parser.add_argument(
@@ -119,7 +184,9 @@ def build_parser():
         "--output",
         choices=["text", "json", "urls"],
         default="text",
-        help="Output format (default: text). 'json' prints raw response, 'urls' prints one URL per line.",
+        metavar="{text,json,urls}",
+        help="How the result is printed. Default: text. "
+        "text = readable summary, json = raw data, urls = just the links.",
     )
 
     parser.add_argument(
@@ -127,7 +194,8 @@ def build_parser():
         "--download",
         default=None,
         metavar="DIR",
-        help="Download generated images/video to DIR (created if it doesn't exist).",
+        help="Save the generated images/video to a folder on disk (DIR). "
+        "The folder is created if it does not already exist.",
     )
 
     parser.add_argument(
@@ -135,7 +203,7 @@ def build_parser():
         "--verbose",
         action="store_true",
         default=False,
-        help="Enable verbose/debug logging output.",
+        help="Show extra troubleshooting information while running.",
     )
 
     return parser
@@ -198,29 +266,32 @@ async def download_file(url, dest_path, session=None):
     return False
 
 
-async def download_results(result, dest_dir, content_type):
+async def download_results(result, dest_dir, content_type, model_name, aspect_name):
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
 
     if content_type == "video":
         video_url = result.get("video", {}).get("video_url")
         if not video_url:
-            print("Warning: no video URL found in response.", file=sys.stderr)
+            print(
+                _color("red", "  no video URL found in response", file=sys.stderr),
+                file=sys.stderr,
+            )
             return
-        ext = "mp4"
-        filename = f"001.{ext}"
+        filename = f"{model_name}_{aspect_name}_{ts}_001.mp4"
         dest_path = dest / filename
-        print(f"Downloading video -> {dest_path}")
+        print(f"  downloading -> {dest_path}")
         ok = await download_file(video_url, dest_path)
         if ok:
-            print(f"  Saved: {dest_path}")
+            print(_color("green", f"  saved: {dest_path}"))
         else:
-            print(f"  Failed to download: {video_url}", file=sys.stderr)
+            print(_color("red", f"  failed: {video_url}"), file=sys.stderr)
         return
 
     images = result.get("images", [])
     if not images:
-        print("Warning: no images found in response.", file=sys.stderr)
+        print(_color("red", "  no images found in response"), file=sys.stderr)
         return
 
     for i, img in enumerate(images, 1):
@@ -230,30 +301,33 @@ async def download_results(result, dest_dir, content_type):
         ext = "jpg"
         if ".png" in url:
             ext = "png"
-        filename = f"{i:03d}.{ext}"
+        filename = f"{model_name}_{aspect_name}_{ts}_{i:03d}.{ext}"
         dest_path = dest / filename
-        print(f"Downloading image {i}/{len(images)} -> {dest_path}")
+        print(f"  downloading {i}/{len(images)} -> {dest_path}")
         ok = await download_file(url, dest_path)
         if ok:
-            print(f"  Saved: {dest_path}")
+            print(_color("green", f"  saved: {dest_path}"))
         else:
-            print(f"  Failed to download: {url}", file=sys.stderr)
+            print(
+                _color("red", f"  failed {i}/{len(images)}: {url}"),
+                file=sys.stderr,
+            )
 
 
 def format_text(result, content_type):
     lines = []
     if content_type == "video":
         video_url = result.get("video", {}).get("video_url", "N/A")
-        lines.append(f"Prompt: {result.get('prompt', 'N/A')}")
-        lines.append(f"Video URL: {video_url}")
+        lines.append(f"  {_color('bold', 'Prompt:')}  {result.get('prompt', 'N/A')}")
+        lines.append(f"  {_color('bold', 'Video:')}   {_color('cyan', video_url)}")
     else:
-        lines.append(f"Model: {result.get('model', 'N/A')}")
-        lines.append(f"Aspect: {result.get('aspect', 'N/A')}")
-        lines.append(f"Enhanced Prompt: {result.get('prompt', 'N/A')}")
+        lines.append(f"  {_color('bold', 'Model:')}   {model_display(result.get('model', 'N/A'))}")
+        lines.append(f"  {_color('bold', 'Aspect:')}  {result.get('aspect', 'N/A')}")
+        lines.append(f"  {_color('bold', 'Prompt:')}  {result.get('prompt', 'N/A')}")
         images = result.get("images", [])
-        lines.append(f"Images ({len(images)}):")
+        lines.append(f"  {_color('bold', f'Images ({len(images)}):')}")
         for idx, img in enumerate(images, 1):
-            lines.append(f"  [{idx}] {img.get('url', 'N/A')}")
+            lines.append(f"    [{idx}] {_color('cyan', img.get('url', 'N/A'))}")
     return "\n".join(lines)
 
 
@@ -271,11 +345,22 @@ def format_urls(result, content_type):
     return "\n".join(urls)
 
 
+def model_display(model):
+    if isinstance(model, Model):
+        return MODEL_DISPLAY.get(model, model.name)
+    try:
+        return MODEL_DISPLAY.get(Model[model], model)
+    except (KeyError, ValueError):
+        return model
+
+
 async def run(args):
     cookie_val, use_auto = resolve_cookie(args)
     model = MODEL_MAP[args.model]
     aspect = ASPECT_MAP[args.aspect]
     content_type = "video" if args.video else "image"
+    timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+    model_label = model_display(model)
 
     logger = logging.getLogger("bingart")
     if args.verbose:
@@ -291,6 +376,9 @@ async def run(args):
         if args.download:
             logger.debug("Download dir: %s", args.download)
         logger.debug("Auth: %s", "auto-detect" if use_auto else "cookie")
+
+    print(_header(__version__, timestamp, model_label, args.aspect, content_type))
+    print(_color("dim", f"  Working on it - sending your prompt to Bing..."))
 
     if use_auto:
         bing = BingArt(auto=True)
@@ -312,10 +400,14 @@ async def run(args):
     elif args.output == "urls":
         print(format_urls(result, content_type))
     else:
+        print()
         print(format_text(result, content_type))
 
     if args.download:
-        await download_results(result, args.download, content_type)
+        print()
+        await download_results(
+            result, args.download, content_type, model_label, args.aspect
+        )
 
 
 def main():

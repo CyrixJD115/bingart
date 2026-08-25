@@ -12,7 +12,6 @@ BING_ORIGIN = "https://www.bing.com"
 IMAGE_HOST = "https://th.bing.com"
 
 POLL_INTERVAL = 5
-POLL_INTERVAL_GPT4O = 3
 
 BROWSERS = ["chrome", "edge", "firefox", "brave", "opera", "vivaldi", "chromium"]
 
@@ -23,9 +22,7 @@ REJECTION_MARKERS = [
 ]
 
 AUTH_MARKER = 'id="id_a" style="display:none"'
-GPT4O_STREAMING_MARKER = "imgri-inner-container strm"
-
-MODEL_BODY_MAP = {0: "dalle", 1: "gpt4o", 4: "maiimage1"}
+MODEL_BODY_MAP = {10: "maiimage25e", 9: "maiimage2sft"}
 ASPECT_BODY_MAP = {1: "1:1", 2: "7:4", 3: "4:7"}
 
 RE_IG = re.compile(r'IG:"([^"]+)"')
@@ -40,9 +37,8 @@ RE_VIDEO_URL = re.compile(r'ourl="([^"]+)"')
 
 
 class Model(Enum):
-    DALLE = 0
-    GPT4O = 1
-    MAI1 = 4
+    FLASH = 10
+    ILLUSTRATION = 9
 
 
 class Aspect(Enum):
@@ -82,10 +78,7 @@ def _extract_enhanced_prompt(html):
 
 
 def _extract_image_urls(html, model_value):
-    if model_value == Model.GPT4O.value:
-        src_urls = RE_SRC_FULL_OIG.findall(html) or RE_SRC_REL_OIG.findall(html)
-    else:
-        src_urls = RE_SRC_ANY.findall(html)
+    src_urls = RE_SRC_ANY.findall(html)
 
     images = []
     for src_url in src_urls:
@@ -145,9 +138,7 @@ class BingArt:
 
     async def _poll_images(self, query, request_id, model):
         mdl_value = model.value if isinstance(model, Model) else model
-        interval = (
-            POLL_INTERVAL_GPT4O if mdl_value == Model.GPT4O.value else POLL_INTERVAL
-        )
+        interval = POLL_INTERVAL
         encoded = urlencode({"q": query})
 
         while True:
@@ -156,13 +147,6 @@ class BingArt:
             _check_prompt_rejected(response.text)
 
             if "text/css" not in response.text:
-                await asyncio.sleep(interval)
-                continue
-
-            if (
-                mdl_value == Model.GPT4O.value
-                and GPT4O_STREAMING_MARKER in response.text
-            ):
                 await asyncio.sleep(interval)
                 continue
 
@@ -225,7 +209,7 @@ class BingArt:
             params.update({"rt": rt_value, "mdl": str(mdl_value), "ar": str(ar_value)})
             payload = {
                 "q": query,
-                "model": MODEL_BODY_MAP.get(mdl_value, "dalle"),
+                "model": MODEL_BODY_MAP.get(mdl_value, "maiimage25e"),
                 "aspectRatio": ASPECT_BODY_MAP.get(ar_value, "1:1"),
             }
 
@@ -237,7 +221,11 @@ class BingArt:
         )
         _check_prompt_rejected(response.text)
 
-        redirect_url = response.headers.get("Location", "") or response.text
+        location = response.headers.get("Location")
+        if not location:
+            raise AuthCookieError("Auth failed or generic error.")
+
+        redirect_url = location
         if redirect_url.startswith("/"):
             redirect_url = f"{BING_ORIGIN}{redirect_url}"
 
@@ -245,14 +233,13 @@ class BingArt:
         if not id_match:
             raise AuthCookieError("Auth failed or generic error.")
 
-        if response.headers.get("Location"):
-            redirect_response = await self.session.get(redirect_url)
-            _check_prompt_rejected(redirect_response.text)
+        redirect_response = await self.session.get(redirect_url)
+        _check_prompt_rejected(redirect_response.text)
 
         return id_match.group(1)
 
     async def generate(
-        self, query, model=Model.DALLE, aspect=Aspect.SQUARE, content_type="image"
+        self, query, model=Model.FLASH, aspect=Aspect.SQUARE, content_type="image"
     ):
         if self.IG is None:
             await self._fetch_config()
